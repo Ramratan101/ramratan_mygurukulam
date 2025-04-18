@@ -1,0 +1,13 @@
+plugin: aws_ec2
+regions:
+  - us-east-2
+
+filters:
+  "tag:env": "dev"  
+
+hostnames:
+  - private-ip-address
+
+keyed_groups:
+  - key: tags.Name
+    prefix: tag
