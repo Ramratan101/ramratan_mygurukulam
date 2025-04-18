@@ -1,0 +1,68 @@
+---
+- name: Install PostgreSQL Exporter
+  hosts: localhost
+  become: yes
+
+  vars_prompt:
+    - name: "postgres_password"
+      prompt: "Enter PostgreSQL password"
+      private: yes
+
+  vars:
+    postgres_exporter_version: "0.15.0"
+    postgres_exporter_user: postgres_exporter
+    postgres_exporter_port: 9187
+    postgres_db_name: attendance_db
+    postgres_user: postgres
+
+  tasks:
+
+    - name: Create postgres_exporter user
+      user:
+        name: "{{ postgres_exporter_user }}"
+        shell: /sbin/nologin
+
+    - name: Download PostgreSQL Exporter
+      get_url:
+        url: "https://github.com/prometheus-community/postgres_exporter/releases/download/v{{ postgres_exporter_version }}/postgres_exporter-{{ postgres_exporter_version }}.linux-amd64.tar.gz"
+        dest: /tmp/postgres_exporter.tar.gz
+
+    - name: Extract Exporter
+      unarchive:
+        src: /tmp/postgres_exporter.tar.gz
+        dest: /opt/
+        remote_src: yes
+
+    - name: Move binary to /usr/local/bin
+      copy:
+        remote_src: yes
+        src: "/opt/postgres_exporter-{{ postgres_exporter_version }}.linux-amd64/postgres_exporter"
+        dest: /usr/local/bin/postgres_exporter
+        mode: '0755'
+
+    - name: Create systemd service
+      copy:
+        dest: /etc/systemd/system/postgres_exporter.service
+        content: |
+          [Unit]
+          Description=PostgreSQL Exporter
+          After=network.target
+
+          [Service]
+          User={{ postgres_exporter_user }}
+          Environment=DATA_SOURCE_NAME=postgresql://{{ postgres_user }}:{{ postgres_password }}@localhost:5432/{{ postgres_db_name }}?sslmode=disable
+          ExecStart=/usr/local/bin/postgres_exporter
+          Restart=always
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Reload systemd
+      systemd:
+        daemon_reload: yes
+
+    - name: Enable and start postgres_exporter
+      systemd:
+        name: postgres_exporter
+        enabled: yes
+        state: started
